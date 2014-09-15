@@ -1,0 +1,20 @@
+{
+  "name": "sl-server",
+  "version": "0.0.6",
+  "description": "A simple speed limit static server",
+  "main": "slserver.js",
+  "bin":{
+    "slserver":"bin/slserver.js"
+  },
+  "keywords": [
+    "webserver",
+    "speed",
+    "limit"
+  ],
+  "author": "JrIdeA",
+  "dependencies":{
+    "colors": "^0.6.2",
+    "commander": "^2.3.0",
+    "mime": "^1.2.11"
+  }
+}
