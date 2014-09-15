@@ -129,7 +129,6 @@ app.run = function(options){
                     loopTime++;
 
                     index += bytesRead;
-                    //console.log('('+index+'/'+allsize+')'+":"+loopTime);
                     if(index >= allsize){
                         res.end();
                         fs.close(fd);
