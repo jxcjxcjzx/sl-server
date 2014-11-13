@@ -1,10 +1,10 @@
 {
   "name": "sl-server",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "A simple speed limit static server",
   "main": "slserver.js",
-  "bin":{
-    "slserver":"bin/slserver.js"
+  "bin": {
+    "slserver": "bin/slserver.js"
   },
   "keywords": [
     "webserver",
@@ -16,9 +16,13 @@
     "type": "git",
     "url": "https://github.com/JrIdeA/sl-server.git"
   },
-  "dependencies":{
+  "dependencies": {
     "colors": "^0.6.2",
     "commander": "^2.3.0",
-    "mime": "^1.2.11"
+    "mime": "^1.2.11",
+    "etag": "^1.4.0"
+  },
+  "devDependencies": {
+
   }
 }

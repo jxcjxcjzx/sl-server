@@ -1,5 +1,5 @@
 var DEFAULT_OPTION = {
-    clientcache: false,
+    clientcache: true,
     port: 8233,
     limit: 0
 };
@@ -14,11 +14,13 @@ var notLimitExt = {
     css:true
 };
 
-var fs = require("fs"),
-    http = require("http"),
-    pathKit = require("path"),
-    mime = require("mime"),
-    colors = require("colors"),
+var fs = require('fs'),
+    http = require('http'),
+    pathKit = require('path'),
+    mime = require('mime'),
+    colors = require('colors'),
+    etag = require('etag'),
+    url = require('url')
     H = require(LIB_PATH+'helper');
 
 function triggerError(res,errorCode){
@@ -32,7 +34,7 @@ var app = {};
 app.run = function(options){
     var opt = H.extend(DEFAULT_OPTION,options),
         server = http.createServer(),
-        timeMs = opt.limit?Math.ceil(S_BUFFER_SIZE * 1000 / 1024 / options.limit):0;
+        timeMs = opt.limit? Math.ceil(S_BUFFER_SIZE * 1000 / 1024 / options.limit): 0;
 
     server.on('request',function(req,res){
         var reqUrl = req.url,
@@ -49,7 +51,7 @@ app.run = function(options){
             case '/favicon.ico':
                 return triggerError(res);
             default:
-                filename = reqUrl.substr(1);
+                filename = url.parse(reqUrl).pathname;
         }
 
         fileExt = pathKit.extname(filename);
@@ -81,7 +83,9 @@ app.run = function(options){
             }
 
             try{
-                file.size = fs.fstatSync(fd).size;
+                var fstat = fs.fstatSync(fd);
+                file.size = fstat.size;
+                file.etag = etag(fstat);
             }catch(e){
                 H.logError('Get filesize: '+file.path);
                 return triggerError(res,500);
@@ -96,6 +100,7 @@ app.run = function(options){
                 header["Accept-Ranges"] = requestRange.unit;
                 header["Content-Range"] = requestRange.unit+" "+requestRange.start+"-"+(file.size-1)+"/"+file.size;
                 header["Content-Length"] = requestRange.length;
+                header["etag"] = file.etag;
             }else{
                 header["Content-Length"] = file.size;
             }
