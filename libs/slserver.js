@@ -58,7 +58,7 @@ app.run = function(options){
 
         file = {
             name:filename,
-            path:"./"+filename,
+            path:"./"+(filename[0] == '/'?filename.slice(1): filename),
             ext:fileExt.length && fileExt.substr(1),
             mime: mime.lookup(filename)
         };

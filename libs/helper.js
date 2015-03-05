@@ -13,7 +13,7 @@ var helper = {
     },
     parseRequestRange:function(str){
         var matches;
-        if (matches = str.match(/^(\w+)=(\d+)-(\d+)?/)){
+        if (matches = str.match(/^(.+)=(\d+)?-(\d+)?/)){
             return {
                 unit: matches[1],
                 start: +matches[2],
