@@ -9,6 +9,7 @@ cmd
     .option '-l, --limit <n>', 'turn speed limit on, unit is KB, set to 0 is unlimit, default is unlimit'
     .option '-w, --limitweb', 'speed limit also use in html/js/css file'
     .option '--nocache', 'disabled client cache'
+    .option '--noopen', 'dont open browser when server start'
     .parse process.argv
 
 options =
@@ -16,6 +17,7 @@ options =
     limit: cmd.limit
     cache: !cmd.nocache
     weblimit: cmd.limitweb
+    openbrowser: !noopen
 
 root = process.cwd()
 

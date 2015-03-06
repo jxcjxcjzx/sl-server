@@ -1,10 +1,10 @@
 module.exports =
-    open: (file) ->
+    open: (args) ->
         switch process.platform
             when 'darwin' then cmd = 'open '
             when 'win32' then cmd = 'start'
         require 'child_process'
-            .exec cmd + file
+            .exec cmd + args
 
     default: (target, defaults...) ->
         item = defaults.push()
@@ -47,3 +47,17 @@ module.exports =
             start: start
             end: end
         }
+
+    getIp: () ->
+        os = require 'os'
+        output = []
+        for k of netObj
+            v = netObj[k]
+            if Array.isArray(v)
+                o = v.reduce( (p, c, i) ->
+                    if c.family is 'IPv4' and !c.internal
+                        p.push c.address
+                    p
+                [])
+            output = output.concat o
+        output

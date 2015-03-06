@@ -155,3 +155,79 @@ class App
         res.end(msg)
 
 module.exports = App
+
+
+SlServer = (options) ->
+    opt = kit.default options, DEFAULT_OPTIONS
+    opt.root = path.normalize process.cwd() + path.sep
+    server = http.createServer().on('request', ResJob.onRequest)
+    server.listen opt.port
+    # TODO log(ip)
+    if opt.openbrowser
+        kit.open "http://127.0.0.1:#{opt.port}"
+
+class ResJob
+    @onRequest: (req, res, opt) -> new @ req, res, opt
+    @stat: kit.promisify(fs.stat, fs)
+    @P: (func) ->
+        (args...) ->
+            new Promise (resolve, reject) ->
+                func(resolve, reject)
+    constructor: (req, res, opt) ->
+        @req = req
+        @res = res
+        self = @
+
+        @promise = new Promise (resolve, reject) ->
+            res.on 'finish' ->
+                resolve()
+            self.resolve = resolve
+            self.reject = reject
+            self.run()
+        @promise.catch (err) ->
+            # TODO log
+            if typeof err is 'number'
+                self.sendError err
+            else
+                self.sendError 500
+    run: ->
+        @headers =
+            "Server": "Sl-Server"
+            "Accept-Ranges": "bytes"
+            "Date": new Date().toUTCString()
+        getFileStat()
+        .then end
+        if end
+
+
+    # 怎么 promise 用 then
+    getFileStat: ResJob.P ->
+        urlStr = @req.url
+        switch urlStr
+            when 'favicon.ico' then return @reject 404
+            when '/' then pathname = 'index.html'
+            else pathname = url.parse(urlStr).pathname
+        root = @opt.root
+        filepath = path.normalize path.join(@opt.root, pathname)
+        if filepath.substr(0, root) != root
+            return @reject 403
+        ResJob.stat(filepath).then (st) =>
+            unless st.isFile()
+                return @reject 404
+            @stat = st
+            @headers["Last-Modified"] = st.mtime.toUTCString()
+            @headers["ETag"] = etag(st)
+        .catch (err) =>
+            if err.code is 'ENOENT'
+                @reject 404
+            else
+                @reject err
+
+    cacheJudge: ResJob.P ->
+
+    sendError: (statusCode) ->
+        msg = http.STATUS_CODES[statusCode]
+        @res._headers = undefined
+        @res.statusCode = status
+        @res.end(msg)
+        false
