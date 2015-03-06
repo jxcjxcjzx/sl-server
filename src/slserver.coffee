@@ -16,7 +16,7 @@ NO_LIMIT_EXT =
     html: true
     js: true
     css: true
-
+###
 class App
     constructor: (options) ->
         unless @ instanceof App
@@ -139,12 +139,6 @@ class App
                 else
                     source.pipe res
 
-            if limit <= 0
-                source.pipe res
-            else
-                time = 50
-                bytesInterval = @opt.limit
-
         promise.catch (err) =>
             @sendError(500, res)
 
@@ -155,7 +149,14 @@ class App
         res.end(msg)
 
 module.exports = App
+###
 
+StatP = kit.promisify(fs.stat, fs)
+PF = (func) ->
+    (args...) ->
+        self = @
+        new Promise (resolve, reject) ->
+            func.call(self ,resolve, reject)
 
 SlServer = (options) ->
     opt = kit.default options, DEFAULT_OPTIONS
@@ -168,40 +169,32 @@ SlServer = (options) ->
 
 class ResJob
     @onRequest: (req, res, opt) -> new @ req, res, opt
-    @stat: kit.promisify(fs.stat, fs)
-    @P: (func) ->
-        (args...) ->
-            new Promise (resolve, reject) ->
-                func(resolve, reject)
     constructor: (req, res, opt) ->
         @req = req
         @res = res
         self = @
+        @headers =
+            "Server": "Sl-Server"
+            "Accept-Ranges": "bytes"
+            "Date": new Date().toUTCString()
+        promise = new Promise (resolve, reject) ->
+        # TODO should wrap?
+        promise.then ->
+            self.fileStat()
+        .then ->
+            self.cacheJudge()
+        .then ->
+            self.responseData()
 
-        @promise = new Promise (resolve, reject) ->
-            res.on 'finish' ->
-                resolve()
-            self.resolve = resolve
-            self.reject = reject
-            self.run()
-        @promise.catch (err) ->
+        promise.catch (err) ->
             # TODO log
             if typeof err is 'number'
                 self.sendError err
             else
                 self.sendError 500
-    run: ->
-        @headers =
-            "Server": "Sl-Server"
-            "Accept-Ranges": "bytes"
-            "Date": new Date().toUTCString()
-        getFileStat()
-        .then end
-        if end
-
 
     # 怎么 promise 用 then
-    getFileStat: ResJob.P ->
+    fileStat: PF (resolve, reject) ->
         urlStr = @req.url
         switch urlStr
             when 'favicon.ico' then return @reject 404
@@ -211,23 +204,100 @@ class ResJob
         filepath = path.normalize path.join(@opt.root, pathname)
         if filepath.substr(0, root) != root
             return @reject 403
-        ResJob.stat(filepath).then (st) =>
+        StatP(filepath).then (st) =>
             unless st.isFile()
                 return @reject 404
             @stat = st
-            @headers["Last-Modified"] = st.mtime.toUTCString()
-            @headers["ETag"] = etag(st)
+            @lastModified = @headers["Last-Modified"] = st.mtime.toUTCString()
+            @etag = @headers["ETag"] = etag(st)
+            type = mime.lookup path
+            charset = mime.charsets.lookup(type)
+            contentType = type + if charset then "; charset=#{ charset }" else ''
+            @headers["Content-Type"] = contentType
+            resolve()
         .catch (err) =>
             if err.code is 'ENOENT'
-                @reject 404
+                reject 404
             else
-                @reject err
+                reject err
 
-    cacheJudge: ResJob.P ->
+    cacheJudge: PF (resolve, reject) ->
+        unless @opt.cache
+            return resolve()
+        req = @req
+        cacheControl = req['cache-control']
+        modifiedSince = req['if-modified-since']
+        noneMatch = req['if-none-match']
+        if cacheControl and ~cacheControl.indexOf('no-cache')
+            return resolve()
+        if noneMatch
+            etags = noneMatch.split / *, */
+            if etags
+                matchEtag = ~etags.indexOf(etag) or '*' is etags[0]
+            if !matchEtag
+                return resolve()
+        if modifiedSince
+            modifiedSince = new Date modifiedSince
+            lastModified = new Date lastModified
+            if lastModified > modifiedSince
+                return resolve()
+        @res._headers = headers
+        reject 304
+
+    responseData: PF (resolve, reject) ->
+        statusCode = 200
+        fsOpt = {}
+        range = kit.parseRange req.headers["range"], @stat.size
+        if range
+            if range.error
+                return reject 416
+            fsOpt.start = range.start
+            fsOpt.end = range.end
+            statusCode = 206
+            headers["Content-Range"] = "#{range.unit} #{range.start}-#{range.end}/#{stat.size}"
+            headers["Content-Length"] = range.end - range.start + 1
+        else
+            headers["Content-Length"] = stat.size
+        unless @.opt.cache
+            headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT'
+            headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
+            headers["Pragma"] = 'no-cache'
+
+        res = @res
+        res.on 'end', ->
+            resolve()
+        source = fs.createReadStream(path, fsOpt)
+        if @opt.limit
+            endFlag = false
+            bytes = @opt.limit
+            loopTime = Math.floor bytes * @opt.interval / 1000
+            sourceLen = headers["Content-Length"]
+            checkNext = ->
+                if endFlag
+                    res.end()
+                else
+                    pipe()
+            res.on 'drain', ->
+                checkNext()
+            pipe = () ->
+                setTimeout () ->
+                    buf = source.read bytes
+                    if !buf
+                        endFlag = true
+                        return
+                    r = res.write buf
+                    if r
+                        checkNext()
+                , loopTime
+        else
+            source.pipe res
 
     sendError: (statusCode) ->
         msg = http.STATUS_CODES[statusCode]
-        @res._headers = undefined
+        if statusCode >= 400
+            @res._headers = undefined
         @res.statusCode = status
         @res.end(msg)
         false
+
+module.exports = SlServer

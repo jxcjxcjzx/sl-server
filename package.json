@@ -17,12 +17,14 @@
     "url": "https://github.com/JrIdeA/sl-server.git"
   },
   "dependencies": {
+    "bluebird": "^2.9.13",
     "colors": "^0.6.2",
     "commander": "^2.3.0",
-    "mime": "^1.2.11",
-    "etag": "^1.4.0"
+    "etag": "^1.4.0",
+    "mime": "^1.2.11"
   },
   "devDependencies": {
-    "bluebird": "^2.9.13"
+    "coffee-script": "^1.9.1",
+    "nokit": "^0.5.4"
   }
 }
