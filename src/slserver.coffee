@@ -8,11 +8,7 @@ etag = require 'etag'
 Promise = require 'bluebird'
 kit = require './kit'
 
-
 DEFAULT_OPTIONS =
-    port: 8233
-    limit: 0
-    cache: false # 默认启用还是不启用
     interval: 50
 
 NO_LIMIT_EXT =
@@ -59,30 +55,27 @@ class ResJob
             "Date": new Date().toUTCString()
         kit.log 'Req: '.blue + self.url
         promise = new Promise (resolve, reject) ->
-            debug ">> Step : start <<".cyan
+            kit.debug ">> Step : start <<".cyan
             resolve()
-        # should wrap? yes
         promise.then ->
-            debug ">> Step : fileStat <<".cyan
+            kit.debug ">> Step : fileStat <<".cyan
             self.fileStat()
         .then ->
-            debug ">> Step : cacheJudge <<".cyan
+            kit.debug ">> Step : cacheJudge <<".cyan
             self.cacheJudge()
         .then ->
-            debug ">> Step : responseData <<".cyan
+            kit.debug ">> Step : responseData <<".cyan
             self.responseData()
         .catch (err) ->
-            debug ">> Step : catch error <<".cyan
-            console.log arguments
+            kit.debug ">> Step : catch error <<".cyan
             code = 500
             if typeof err is 'number'
                 code = err
             else
-                console.log err
-                console.log err.stack
+                kit.log err
+                kit.log err.stack
             self.sendError code
 
-    # 怎么 promise 用 then
     fileStat: PF (resolve, reject) ->
         urlStr = @req.url
         switch urlStr
@@ -91,7 +84,7 @@ class ResJob
             else pathname = url.parse(urlStr).pathname
         root = @opt.root
         @filepath = filepath = path.normalize path.join(@opt.root, pathname)
-        debug "filename: ".yellow + filepath
+        kit.debug "filename" ,"filename: ".yellow + filepath
         if filepath.substr(0, root.length) != root
             return reject 403
         StatP(filepath).then (st) =>
@@ -123,12 +116,12 @@ class ResJob
         cacheControl = headers['cache-control']
         modifiedSince = headers['if-modified-since']
         noneMatch = headers['if-none-match']
-        debug ['req cache headers', cacheControl, modifiedSince, noneMatch]
+        kit.debug 'req cache headers cacheControl,modifiedSince,noneMatch', cacheControl, modifiedSince, noneMatch
         if (cacheControl and ~cacheControl.indexOf('no-cache') or (!modifiedSince and !noneMatch))
             return resolve()
         if noneMatch
             etags = noneMatch.split `/ *, */`
-            debug ['etag', noneMatch, etags]
+            kit.debug 'etag', noneMatch, etags
             if etags
                 matchEtag = ~etags.indexOf(noneMatch) or '*' is etags[0]
             if !matchEtag
@@ -147,7 +140,7 @@ class ResJob
         fsOpt = {}
         stat = @stat
         range = kit.parseRange reqHeaders["range"], stat.size
-        debug ['range', stat.size, reqHeaders["range"], range]
+        kit.debug 'range', stat.size, reqHeaders["range"], range
         if range
             if range.error
                 return reject 416
@@ -164,12 +157,12 @@ class ResJob
             @headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
             @headers["Pragma"] = 'no-cache'
 
-        debug ['fsOpt', fsOpt]
-        debug ['respond headers', @headers]
+        kit.debug 'fsOpt', fsOpt
+        kit.debug 'respond headers', @headers
         res = @res
         res.writeHead statusCode, @headers
         res.on 'finish', ->
-            console.log "Done (#{statusCode}): #{self.url}".green
+            kit.log "Done (#{statusCode}): #{self.url}".green
             resolve()
         # TODO client close？
         source = fs.createReadStream(@filepath, fsOpt)
@@ -178,7 +171,7 @@ class ResJob
             bytes = @opt.bytes
             interval = @opt.interval
             sourceLen = @headers["Content-Length"]
-            debug "speed limit #{@limit} KB, interval: #{interval} ms, bytes: #{bytes} B"
+            kit.debug "read loop", "speed limit #{@limit} KB, interval: #{interval} ms, bytes: #{bytes} B"
             checkNext = ->
                 if endFlag
                     res.end()
@@ -198,7 +191,7 @@ class ResJob
                 , interval
 
         else
-            debug 'unlimited speed'
+            kit.debug 'unlimited speed'
             source.pipe res
 
     sendError: (statusCode) ->
@@ -209,9 +202,9 @@ class ResJob
         @res.writeHead statusCode, headers
         @res.end(msg)
         if err
-            console.log "Err (#{statusCode}): ".red + @url
+            kit.log "Err (#{statusCode}): ".red + @url
         else
-            console.log "Not Modified (#{statusCode}): ".green + @url
+            kit.log "Not Modified (#{statusCode}): ".green + @url
         false
 
 module.exports = SlServer

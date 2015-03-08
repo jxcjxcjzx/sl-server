@@ -1,6 +1,8 @@
 Promise = require 'bluebird'
 colors = require 'colors'
 
+isDevelopment = process.env.NODE_ENV is 'development'
+
 module.exports =
     open: (args) ->
         switch process.platform
@@ -67,6 +69,11 @@ module.exports =
         output
 
     debug: (title, msgs...) ->
+        unless isDevelopment
+            return
+        if arguments.length is 1
+            title = ""
+            msgs = title
         console.log "debug #{title} >>>>>>> ".yellow
         console.log msgs
         console.log '<<<<<<<<<'.yellow
