@@ -40,7 +40,7 @@ class App
                     return false
                 if noneMatch
                     matchEtag = false
-                    etags = noneMatch.split / *, */
+                    etags = noneMatch.split / *, * /
                     if etags
                         matchEtag = ~etags.indexOf(etag) or '*' is etags[0]
                 if modifiedSince
@@ -231,7 +231,7 @@ class ResJob
         if cacheControl and ~cacheControl.indexOf('no-cache')
             return resolve()
         if noneMatch
-            etags = noneMatch.split / *, */
+            etags = noneMatch.split `/ *, */`
             if etags
                 matchEtag = ~etags.indexOf(etag) or '*' is etags[0]
             if !matchEtag
