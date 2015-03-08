@@ -4,7 +4,10 @@ path = require 'path'
 mime = require 'mime'
 colors = require 'colors'
 url = require 'url'
+etag = require 'etag'
+Promise = require 'bluebird'
 kit = require './kit'
+
 
 DEFAULT_OPTIONS =
     port: 8233
@@ -16,140 +19,6 @@ NO_LIMIT_EXT =
     html: true
     js: true
     css: true
-###
-class App
-    constructor: (options) ->
-        unless @ instanceof App
-            return new App(options)
-
-        @opt = kit.default options, DEFAULT_OPTIONS
-        @root = path.normalize process.cwd() + path.sep
-        @stat = kit.promisify(fs.stat, fs)
-        @server = http.createServer().on('request', requestHandle)
-
-    requestHandle: (req, res) =>
-        promise = new Promise (resolve, reject) =>
-            sendError = (status) ->
-                resolve @sendError(status, res)
-            cacheJudge = (etag, lastModified) ->
-                cacheControl = req['cache-control']
-                modifiedSince = req['if-modified-since']
-                noneMatch = req['if-none-match']
-                matchEtag = matchDate = true
-                if cacheControl and ~cacheControl.indexOf('no-cache')
-                    return false
-                if noneMatch
-                    matchEtag = false
-                    etags = noneMatch.split / *, * /
-                    if etags
-                        matchEtag = ~etags.indexOf(etag) or '*' is etags[0]
-                if modifiedSince
-                    modifiedSince = new Date modifiedSince
-                    lastModified = new Date lastModified
-                    matchDate = lastModified <= modifiedSince
-                return matchEtag && matchDate
-
-            urlStr = req.url
-            switch urlStr
-                when 'favicon.ico' then return sendError(404)
-                when '/' then pathname += "index.html"
-                else pathname = url.parse(urlStr).pathname
-
-            fullpath = path.normalize path.join(@root, pathname)
-            if fullpath.substr(0, @root.length) != @root
-                return sendError(403)
-
-            stat = undefined
-            headers = undefined
-            @stat(fullpath).then (st) =>
-                unless st.isFile()
-                    return sendError(404)
-                stat = st
-            .catch (err) ->
-                if err.code is 'ENOENT'
-                    sendError(404)
-                else
-                    reject err
-            .then =>
-                # Common Headers
-                headers =
-                    "Server": "Sl-Server"
-                    "Accept-Ranges": "bytes"
-                    "Date": new Date().toUTCString()
-                    "Last-Modified": stat.mtime.toUTCString()
-                    "ETag": etag(stat)
-
-                # 304
-                if @.opt.cache and cacheJudge()
-                    res._headers = headers
-                    res.writeHead(304)
-                    res.end()
-                    return resolve()
-
-                # Content-Type
-                type = mime.lookup path
-                charset = mime.charsets.lookup(type)
-                contentType = type + if charset then "; charset=#{ charset }" else ''
-                headers["Content-Type"] = contentType
-
-                unless @.opt.cache
-                    headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT'
-                    headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
-                    headers["Pragma"] = 'no-cache'
-
-                statusCode = 200
-                fsOpt = {}
-                range = kit.parseRange req.headers["range"], stat.size
-                if range
-                    if range.error
-                        sendError(416)
-                    fsOpt.start = range.start
-                    fsOpt.end = range.end
-                    statusCode = 206
-                    headers["Content-Range"] = "#{range.unit} #{range.start}-#{range.end}/#{stat.size}"
-                    headers["Content-Length"] = range.end - range.start + 1
-                else
-                    headers["Content-Length"] = stat.size
-
-                res.on 'end', ->
-                    resolve()
-                source = fs.createReadStream(path, fsOpt)
-                if @opt.limit
-                    endFlag = false
-                    bytes = @opt.limit * 1024
-                    loopTime = Math.floor bytes * @opt.interval / 1000
-                    sourceLen = headers["Content-Length"]
-                    checkNext = ->
-                        if endFlag
-                            res.end()
-                        else
-                            pipe()
-                    res.on 'drain', ->
-                        checkNext()
-                    pipe = () ->
-                        setTimeout () ->
-                            buf = source.read bytes
-                            if !buf
-                                endFlag = true
-                                return
-                            r = res.write buf
-                            if r
-                                checkNext()
-                        , loopTime
-                else
-                    source.pipe res
-
-        promise.catch (err) =>
-            @sendError(500, res)
-
-    sendError: (statusCode, res) ->
-        msg = http.STATUS_CODES[statusCode]
-        res._headers = undefined
-        res.statusCode = status
-        res.end(msg)
-
-module.exports = App
-###
 
 StatP = kit.promisify(fs.stat, fs)
 PF = (func) ->
@@ -161,37 +30,57 @@ PF = (func) ->
 SlServer = (options) ->
     opt = kit.default options, DEFAULT_OPTIONS
     opt.root = path.normalize process.cwd() + path.sep
-    server = http.createServer().on('request', ResJob.onRequest)
+    opt.bytes = Math.floor 1024 * opt.limit * opt.interval / 1000
+    server = http.createServer().on('request', (req, res) ->
+        ResJob.onRequest(req, res, opt)
+    )
     server.listen opt.port
-    # TODO log(ip)
+    ip = kit.getIp()
+    ip.unshift('127.0.0.1')
+    ip = ip.map (m) -> "#{m}:#{opt.port}"
     if opt.openbrowser
         kit.open "http://127.0.0.1:#{opt.port}"
+    kit.debug 'Sl-Server Options', opt
+    kit.log 'Server Start: '.blue + ip.join ' / '
+    kit.log 'Speed Limit: '.blue + (if opt.limit then opt.limit else 'unlimited') + ' KB'.blue
 
 class ResJob
     @onRequest: (req, res, opt) -> new @ req, res, opt
     constructor: (req, res, opt) ->
+        @opt = opt
+        @limit = @opt.limit
         @req = req
         @res = res
+        @url = req.url
         self = @
         @headers =
             "Server": "Sl-Server"
             "Accept-Ranges": "bytes"
             "Date": new Date().toUTCString()
+        kit.log 'Req: '.blue + self.url
         promise = new Promise (resolve, reject) ->
-        # TODO should wrap?
+            debug ">> Step : start <<".cyan
+            resolve()
+        # should wrap? yes
         promise.then ->
+            debug ">> Step : fileStat <<".cyan
             self.fileStat()
         .then ->
+            debug ">> Step : cacheJudge <<".cyan
             self.cacheJudge()
         .then ->
+            debug ">> Step : responseData <<".cyan
             self.responseData()
-
-        promise.catch (err) ->
-            # TODO log
+        .catch (err) ->
+            debug ">> Step : catch error <<".cyan
+            console.log arguments
+            code = 500
             if typeof err is 'number'
-                self.sendError err
+                code = err
             else
-                self.sendError 500
+                console.log err
+                console.log err.stack
+            self.sendError code
 
     # 怎么 promise 用 then
     fileStat: PF (resolve, reject) ->
@@ -201,19 +90,24 @@ class ResJob
             when '/' then pathname = 'index.html'
             else pathname = url.parse(urlStr).pathname
         root = @opt.root
-        filepath = path.normalize path.join(@opt.root, pathname)
-        if filepath.substr(0, root) != root
-            return @reject 403
+        @filepath = filepath = path.normalize path.join(@opt.root, pathname)
+        debug "filename: ".yellow + filepath
+        if filepath.substr(0, root.length) != root
+            return reject 403
         StatP(filepath).then (st) =>
             unless st.isFile()
-                return @reject 404
+                return reject 404
             @stat = st
             @lastModified = @headers["Last-Modified"] = st.mtime.toUTCString()
             @etag = @headers["ETag"] = etag(st)
-            type = mime.lookup path
+            type = mime.lookup filepath
             charset = mime.charsets.lookup(type)
             contentType = type + if charset then "; charset=#{ charset }" else ''
             @headers["Content-Type"] = contentType
+            unless @opt.weblimit
+                ext = path.extname filepath
+                if ext in ['.html', '.js', '.css']
+                    @limit = 0
             resolve()
         .catch (err) =>
             if err.code is 'ENOENT'
@@ -225,15 +119,18 @@ class ResJob
         unless @opt.cache
             return resolve()
         req = @req
-        cacheControl = req['cache-control']
-        modifiedSince = req['if-modified-since']
-        noneMatch = req['if-none-match']
-        if cacheControl and ~cacheControl.indexOf('no-cache')
+        headers = req.headers
+        cacheControl = headers['cache-control']
+        modifiedSince = headers['if-modified-since']
+        noneMatch = headers['if-none-match']
+        debug ['req cache headers', cacheControl, modifiedSince, noneMatch]
+        if (cacheControl and ~cacheControl.indexOf('no-cache') or (!modifiedSince and !noneMatch))
             return resolve()
         if noneMatch
             etags = noneMatch.split `/ *, */`
+            debug ['etag', noneMatch, etags]
             if etags
-                matchEtag = ~etags.indexOf(etag) or '*' is etags[0]
+                matchEtag = ~etags.indexOf(noneMatch) or '*' is etags[0]
             if !matchEtag
                 return resolve()
         if modifiedSince
@@ -241,37 +138,47 @@ class ResJob
             lastModified = new Date lastModified
             if lastModified > modifiedSince
                 return resolve()
-        @res._headers = headers
         reject 304
 
     responseData: PF (resolve, reject) ->
+        self = @
         statusCode = 200
+        reqHeaders = @req.headers
         fsOpt = {}
-        range = kit.parseRange req.headers["range"], @stat.size
+        stat = @stat
+        range = kit.parseRange reqHeaders["range"], stat.size
+        debug ['range', stat.size, reqHeaders["range"], range]
         if range
             if range.error
                 return reject 416
             fsOpt.start = range.start
             fsOpt.end = range.end
             statusCode = 206
-            headers["Content-Range"] = "#{range.unit} #{range.start}-#{range.end}/#{stat.size}"
-            headers["Content-Length"] = range.end - range.start + 1
+            @headers["Accept-Ranges"] = range.unit
+            @headers["Content-Range"] = "#{range.unit} #{range.start}-#{range.end}/#{stat.size}"
+            @headers["Content-Length"] = range.end - range.start + 1
         else
-            headers["Content-Length"] = stat.size
+            @headers["Content-Length"] = stat.size
         unless @.opt.cache
-            headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT'
-            headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
-            headers["Pragma"] = 'no-cache'
+            @headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT'
+            @headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
+            @headers["Pragma"] = 'no-cache'
 
+        debug ['fsOpt', fsOpt]
+        debug ['respond headers', @headers]
         res = @res
-        res.on 'end', ->
+        res.writeHead statusCode, @headers
+        res.on 'finish', ->
+            console.log "Done (#{statusCode}): #{self.url}".green
             resolve()
-        source = fs.createReadStream(path, fsOpt)
-        if @opt.limit
+        # TODO client close？
+        source = fs.createReadStream(@filepath, fsOpt)
+        if @limit > 0
             endFlag = false
-            bytes = @opt.limit
-            loopTime = Math.floor bytes * @opt.interval / 1000
-            sourceLen = headers["Content-Length"]
+            bytes = @opt.bytes
+            interval = @opt.interval
+            sourceLen = @headers["Content-Length"]
+            debug "speed limit #{@limit} KB, interval: #{interval} ms, bytes: #{bytes} B"
             checkNext = ->
                 if endFlag
                     res.end()
@@ -279,25 +186,32 @@ class ResJob
                     pipe()
             res.on 'drain', ->
                 checkNext()
-            pipe = () ->
+            do pipe = () ->
                 setTimeout () ->
                     buf = source.read bytes
                     if !buf
                         endFlag = true
-                        return
+                        return checkNext()
                     r = res.write buf
                     if r
                         checkNext()
-                , loopTime
+                , interval
+
         else
+            debug 'unlimited speed'
             source.pipe res
 
     sendError: (statusCode) ->
         msg = http.STATUS_CODES[statusCode]
         if statusCode >= 400
-            @res._headers = undefined
-        @res.statusCode = status
+            err = true
+            headers = undefined
+        @res.writeHead statusCode, headers
         @res.end(msg)
+        if err
+            console.log "Err (#{statusCode}): ".red + @url
+        else
+            console.log "Not Modified (#{statusCode}): ".green + @url
         false
 
 module.exports = SlServer

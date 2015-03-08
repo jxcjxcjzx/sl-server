@@ -14,11 +14,9 @@ cmd
 
 options =
     port: cmd.port
-    limit: cmd.limit
+    limit: if cmd.limit > 0 then cmd.limit else 0
     cache: !cmd.nocache
-    weblimit: cmd.limitweb
-    openbrowser: !noopen
+    weblimit: !!cmd.limitweb
+    openbrowser: !cmd.noopen
 
-root = process.cwd()
-
-slserver(root ,options)
+slserver(options)

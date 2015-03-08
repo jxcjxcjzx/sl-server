@@ -1,3 +1,6 @@
+Promise = require 'bluebird'
+colors = require 'colors'
+
 module.exports =
     open: (args) ->
         switch process.platform
@@ -7,23 +10,23 @@ module.exports =
             .exec cmd + args
 
     default: (target, defaults...) ->
-        item = defaults.push()
+        item = defaults.pop()
         while item
             for k, v of item
                 unless target[k]?
                     target[k] = v
-            item = defaults.push()
+            item = defaults.pop()
         target
 
     promisify: (fn, self) ->
-		(args...) ->
-			new Promise (resolve, reject) ->
-				args.push ->
-					if arguments[0]?
-						reject arguments[0]
-					else
-						resolve arguments[1]
-				fn.apply self, args
+        (args...) ->
+            new Promise (resolve, reject) ->
+                args.push ->
+                    if arguments[0]?
+                        reject arguments[0]
+                    else
+                        resolve arguments[1]
+                fn.apply self, args
 
     parseRange: (str, fileLen) ->
         unless str
@@ -40,19 +43,20 @@ module.exports =
             end = fileLen - 1
         if end > fileLen - 1
             end = fileLen - 1
-        if not start? or not end? or start > end or start < 0
-            return { error: true }
+        if not start? or not end? or +start > +end or start < 0
+            console.log [ '>>' ,start, end, '<<']
+            return error: true
         return {
             unit: matches[1]
-            start: start
-            end: end
+            start: +start
+            end: +end
         }
 
     getIp: () ->
         os = require 'os'
+        netObj = os.networkInterfaces()
         output = []
-        for k of netObj
-            v = netObj[k]
+        for k, v of netObj
             if Array.isArray(v)
                 o = v.reduce( (p, c, i) ->
                     if c.family is 'IPv4' and !c.internal
@@ -61,3 +65,11 @@ module.exports =
                 [])
             output = output.concat o
         output
+
+    debug: (title, msgs...) ->
+        console.log "debug #{title} >>>>>>> ".yellow
+        console.log msgs
+        console.log '<<<<<<<<<'.yellow
+
+    log: (msg) ->
+        console.log msg
