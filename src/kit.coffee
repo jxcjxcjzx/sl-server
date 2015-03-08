@@ -46,7 +46,6 @@ module.exports =
         if end > fileLen - 1
             end = fileLen - 1
         if not start? or not end? or +start > +end or start < 0
-            console.log [ '>>' ,start, end, '<<']
             return error: true
         return {
             unit: matches[1]

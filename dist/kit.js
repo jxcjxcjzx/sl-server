@@ -71,7 +71,6 @@ module.exports = {
       end = fileLen - 1;
     }
     if ((start == null) || (end == null) || +start > +end || start < 0) {
-      console.log(['>>', start, end, '<<']);
       return {
         error: true
       };
