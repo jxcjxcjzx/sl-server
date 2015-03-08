@@ -1,12 +1,13 @@
 cmd = require "commander"
 slserver = require "./slserver"
+{ version } = require "../package.json"
 
 cmd
-    .version '1.0.0'
+    .version version
     .usage  '\n\n    slserver -l 100 -p 8233'
     .option '-p, --port <n>', 'server port, default is 8233'
     .option '-l, --limit <n>', 'turn speed limit on, unit is KB, set to 0 is unlimited, default is unlimited'
-    .option '-w, --limitweb', 'speed limit also use in html/js/css file'
+    .option '-w, --limitweb', 'speed limit also use in HTML/JS/CSS file'
     .option '--nocache', 'disabled client cache'
     .option '--noopen', 'don\'t open browser when server start'
     .parse process.argv
