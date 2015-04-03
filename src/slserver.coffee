@@ -85,11 +85,9 @@ class ResJob
         root = @opt.root
         @filepath = filepath = path.normalize path.join(@opt.root, pathname)
         kit.debug "filename" ,"filename: ".yellow + filepath
-        if filepath.substr(0, root.length) != root
-            return reject 403
+        return reject 403 if filepath.substr(0, root.length) != root
         StatP(filepath).then (st) =>
-            unless st.isFile()
-                return reject 404
+            return reject 404 unless st.isFile()
             @stat = st
             @lastModified = @headers["Last-Modified"] = st.mtime.toUTCString()
             @etag = @headers["ETag"] = etag(st)
@@ -109,28 +107,25 @@ class ResJob
                 reject err
 
     cacheJudge: PF (resolve, reject) ->
-        unless @opt.cache
-            return resolve()
+        return resolve() unless @opt.cache
         req = @req
         headers = req.headers
         cacheControl = headers['cache-control']
         modifiedSince = headers['if-modified-since']
         noneMatch = headers['if-none-match']
         kit.debug 'req cache headers cacheControl,modifiedSince,noneMatch', cacheControl, modifiedSince, noneMatch
-        if (cacheControl and ~cacheControl.indexOf('no-cache') or (!modifiedSince and !noneMatch))
-            return resolve()
+        return resolve() if (cacheControl and ~cacheControl.indexOf('no-cache') or (!modifiedSince and !noneMatch))
         if noneMatch
             etags = noneMatch.split `/ *, */`
             kit.debug 'etag', noneMatch, etags
             if etags
                 matchEtag = ~etags.indexOf(noneMatch) or '*' is etags[0]
-            if !matchEtag
-                return resolve()
+            return resolve() if not matchEtag
+
         if modifiedSince
             modifiedSince = new Date modifiedSince
             lastModified = new Date lastModified
-            if lastModified > modifiedSince
-                return resolve()
+            return resolve() if lastModified > modifiedSince
         reject 304
 
     responseData: PF (resolve, reject) ->
@@ -142,12 +137,10 @@ class ResJob
         range = kit.parseRange reqHeaders["range"], stat.size
         kit.debug 'range', stat.size, reqHeaders["range"], range
         if range
-            if range.error
-                return reject 416
+            return reject 416 if range.error
             fsOpt.start = range.start
             fsOpt.end = range.end
             statusCode = 206
-            @headers["Accept-Ranges"] = range.unit
             @headers["Content-Range"] = "#{range.unit} #{range.start}-#{range.end}/#{stat.size}"
             @headers["Content-Length"] = range.end - range.start + 1
         else
@@ -155,7 +148,7 @@ class ResJob
         unless @.opt.cache
             @headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT'
             @headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
-            @headers["Pragma"] = 'no-cache'
+            @headers["Pragma"] = 'no-cache, no-store'
 
         kit.debug 'fsOpt', fsOpt
         kit.debug 'respond headers', @headers
@@ -198,7 +191,8 @@ class ResJob
         msg = http.STATUS_CODES[statusCode]
         if statusCode >= 400
             err = true
-            headers = undefined
+        @res.statusCode = statusCode
+        @res._headers = undefined
         @res.writeHead statusCode, headers
         @res.end(msg)
         if err
