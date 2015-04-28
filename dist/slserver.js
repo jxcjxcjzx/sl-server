@@ -57,7 +57,7 @@ SlServer = function(options) {
     return m + ":" + opt.port;
   });
   if (opt.openbrowser) {
-    kit.open("http://127.0.0.1:" + opt.port);
+    kit.open("http://" + (ip.length > 1 ? ip[1] : ip[0]));
   }
   kit.debug('Sl-Server Options', opt);
   kit.log('Server Start: '.blue + ip.join(' / '));

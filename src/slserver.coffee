@@ -35,7 +35,7 @@ SlServer = (options) ->
     ip.unshift('127.0.0.1')
     ip = ip.map (m) -> "#{m}:#{opt.port}"
     if opt.openbrowser
-        kit.open "http://127.0.0.1:#{opt.port}"
+        kit.open "http://#{if ip.length > 1 then ip[1] else ip[0]}"
     kit.debug 'Sl-Server Options', opt
     kit.log 'Server Start: '.blue + ip.join ' / '
     kit.log 'Speed Limit: '.blue + (if opt.limit then opt.limit else 'unlimited') + ' KB'.blue
