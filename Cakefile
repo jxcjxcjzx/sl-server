@@ -23,7 +23,7 @@ buildFiles = (files) ->
 task 'dev', 'In dev, Watch all file', ->
     fs.watchDir srcPath, {
         pattern: '*.coffee'
-        handler: (type, path) ->                        
+        handler: (type, path) ->
             buildFiles([path])
     }
 

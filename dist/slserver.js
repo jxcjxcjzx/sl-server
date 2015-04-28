@@ -175,7 +175,7 @@ ResJob = (function() {
       return resolve();
     }
     if (noneMatch) {
-      etags = noneMatch.split(/ *, */);
+      etags = this.etag.split(/ *, */);
       kit.debug('etag', noneMatch, etags);
       if (etags) {
         matchEtag = ~etags.indexOf(noneMatch) || '*' === etags[0];
@@ -186,7 +186,8 @@ ResJob = (function() {
     }
     if (modifiedSince) {
       modifiedSince = new Date(modifiedSince);
-      lastModified = new Date(lastModified);
+      lastModified = new Date(this.lastModified);
+      kit.debug('last-modified', "modifiedSince: " + modifiedSince + " , lastModified: " + lastModified);
       if (lastModified > modifiedSince) {
         return resolve();
       }
@@ -210,7 +211,6 @@ ResJob = (function() {
       fsOpt.start = range.start;
       fsOpt.end = range.end;
       statusCode = 206;
-      this.headers["Accept-Ranges"] = range.unit;
       this.headers["Content-Range"] = range.unit + " " + range.start + "-" + range.end + "/" + stat.size;
       this.headers["Content-Length"] = range.end - range.start + 1;
     } else {
@@ -219,7 +219,7 @@ ResJob = (function() {
     if (!this.opt.cache) {
       this.headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT';
       this.headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0';
-      this.headers["Pragma"] = 'no-cache';
+      this.headers["Pragma"] = 'no-cache, no-store';
     }
     kit.debug('fsOpt', fsOpt);
     kit.debug('respond headers', this.headers);
@@ -267,13 +267,13 @@ ResJob = (function() {
   });
 
   ResJob.prototype.sendError = function(statusCode) {
-    var err, headers, msg;
+    var err, msg;
     msg = http.STATUS_CODES[statusCode];
     if (statusCode >= 400) {
       err = true;
-      headers = void 0;
     }
-    this.res.writeHead(statusCode, headers);
+    this.res.statusCode = statusCode;
+    this.res._headers = void 0;
     this.res.end(msg);
     if (err) {
       kit.log(("Err (" + statusCode + "): ").red + this.url);

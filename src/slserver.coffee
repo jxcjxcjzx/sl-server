@@ -116,7 +116,7 @@ class ResJob
         kit.debug 'req cache headers cacheControl,modifiedSince,noneMatch', cacheControl, modifiedSince, noneMatch
         return resolve() if (cacheControl and ~cacheControl.indexOf('no-cache') or (!modifiedSince and !noneMatch))
         if noneMatch
-            etags = noneMatch.split `/ *, */`
+            etags = @etag.split `/ *, */`
             kit.debug 'etag', noneMatch, etags
             if etags
                 matchEtag = ~etags.indexOf(noneMatch) or '*' is etags[0]
@@ -124,7 +124,8 @@ class ResJob
 
         if modifiedSince
             modifiedSince = new Date modifiedSince
-            lastModified = new Date lastModified
+            lastModified = new Date @lastModified
+            kit.debug 'last-modified', "modifiedSince: #{modifiedSince} , lastModified: #{lastModified}"
             return resolve() if lastModified > modifiedSince
         reject 304
 
@@ -193,7 +194,6 @@ class ResJob
             err = true
         @res.statusCode = statusCode
         @res._headers = undefined
-        @res.writeHead statusCode, headers
         @res.end(msg)
         if err
             kit.log "Err (#{statusCode}): ".red + @url
