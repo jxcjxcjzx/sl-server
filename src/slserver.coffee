@@ -146,10 +146,13 @@ class ResJob
             @headers["Content-Length"] = range.end - range.start + 1
         else
             @headers["Content-Length"] = stat.size
-        unless @.opt.cache
+        unless @opt.cache
             @headers["Expires"] = 'Wed, 11 Jan 1984 05:00:00 GMT'
             @headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0'
             @headers["Pragma"] = 'no-cache, no-store'
+
+        if @opt.crossorigin
+            @headers["Access-Control-Allow-Origin"] = '*'
 
         kit.debug 'fsOpt', fsOpt
         kit.debug 'respond headers', @headers

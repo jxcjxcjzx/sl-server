@@ -221,6 +221,9 @@ ResJob = (function() {
       this.headers["Cache-Control"] = 'no-cache, must-revalidate, max-age=0';
       this.headers["Pragma"] = 'no-cache, no-store';
     }
+    if (this.opt.crossorigin) {
+      this.headers["Access-Control-Allow-Origin"] = '*';
+    }
     kit.debug('fsOpt', fsOpt);
     kit.debug('respond headers', this.headers);
     res = this.res;

@@ -39,11 +39,12 @@ Usage:
 
 Options:
 
-  -h, --help       output usage information
-  -V, --version    output the version number
-  -p, --port <n>   服务器端口，默认8233
-  -l, --limit <n>  开启限速，即nKB，单位为KB
-  -w, --limitweb   HTML/JS/CSS 文件不限速
-  --nocache        禁用HTTP缓存
-  --noopen         开启服务器的时候不自动打开浏览器
+  -h, --help          output usage information
+  -V, --version       output the version number
+  -p, --port <n>      服务器端口，默认8233
+  -l, --limit <n>     开启限速，即nKB，单位为KB
+  -w, --limitweb      HTML/JS/CSS 文件不限速
+  -c, --crossorigin   提供跨域支持
+  --nocache           禁用HTTP缓存
+  --noopen            开启服务器的时候不自动打开浏览器
 ```
